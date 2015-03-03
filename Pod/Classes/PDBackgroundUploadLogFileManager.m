@@ -6,6 +6,7 @@
 //
 //
 
+#import "AFNetworking.h"
 #import "PDBackgroundUploadLogFileManager.h"
 
 #ifdef DEBUG
@@ -138,7 +139,31 @@
 
 - (void)uploadLogFile:(NSString *)logFilePath
 {
-    NSMutableURLRequest *request = [self.uploadRequest mutableCopy];
+    
+    //logger upload
+    NSDictionary *parameters = @{@"uuid": [[[UIDevice currentDevice] identifierForVendor] UUIDString]};
+    NSMutableURLRequest *request = [[AFHTTPRequestSerializer serializer] multipartFormRequestWithMethod:@"POST" URLString:self.uploadRequest.URL.absoluteString parameters:parameters constructingBodyWithBlock:^(id<AFMultipartFormData> formData) {
+        [formData appendPartWithFileURL:[NSURL fileURLWithPath:logFilePath] name:@"file" fileName:[logFilePath lastPathComponent] mimeType:@"text/x-log" error:nil];
+    } error:nil];
+    
+    AFURLSessionManager *manager = [[AFURLSessionManager alloc] initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    manager.responseSerializer = [AFHTTPResponseSerializer serializer];
+    NSProgress *progress = nil;
+    
+    NSURLSessionUploadTask *uploadTask = [manager uploadTaskWithStreamedRequest:request progress:&progress completionHandler:^(NSURLResponse *response, id responseObject, NSError *error) {
+        if (error) {
+            NSLog(@"Error: %@", error);
+        } else {
+            NSLog(@"%@ %@", response, responseObject);
+        }
+    }];
+    
+    [uploadTask resume];
+    if ([self.delegate respondsToSelector:@selector(attemptingUploadForFilePath:)]) {
+        [self.delegate attemptingUploadForFilePath:logFilePath];
+    }
+    
+  /*  NSMutableURLRequest *request = [self.uploadRequest mutableCopy];
     [request setValue:[logFilePath stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLHostAllowedCharacterSet]] forHTTPHeaderField:@"X-BackgroundUpload-File"];
 
     NSURLSessionTask *task = [self.session uploadTaskWithRequest:request fromFile:[NSURL fileURLWithPath:logFilePath]];
@@ -147,7 +172,7 @@
     [task resume];
     if ([self.delegate respondsToSelector:@selector(attemptingUploadForFilePath:)]) {
         [self.delegate attemptingUploadForFilePath:logFilePath];
-    }
+    }*/
 }
 
 - (NSString *)filePathForTask:(NSURLSessionTask *)task
